@@ -1,0 +1,21 @@
+{
+  "name": "tubecue-back",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "fuse.js": "^7.1.0",
+    "node-webvtt": "^1.9.4",
+    "youtube-caption-scraper": "^1.0.0",
+    "youtube-transcript": "^1.2.1"
+  }
+}
