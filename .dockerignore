@@ -1,2 +1,15 @@
 node_modules
-npm-debug.log
+separated
+whisper_output
+temp_audio.mp3
+*.vtt
+*.json
+*.wav
+*.mp3
+*.mp4
+*.log
+.DS_Store
+.env
+.git
+.gitignore
+
