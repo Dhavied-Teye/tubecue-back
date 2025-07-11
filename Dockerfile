@@ -1,29 +1,24 @@
-# Start with a Python image because Whisper and Demucs need it
-FROM python:3.10-slim
+# Base stage with only what we need
+FROM node:18-slim
 
-# Install system tools like ffmpeg, curl, nodejs, and npm
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    curl \
-    git \
-    nodejs \
-    npm \
-    && apt-get clean
+# Install system dependencies in one layer
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip ffmpeg && \
+    pip3 install yt-dlp && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install the tools you use
-RUN pip install --no-cache-dir yt-dlp openai-whisper demucs
-
-# Create app folder inside the container
+# Set working directory
 WORKDIR /app
 
-# Copy your backend files into the Docker image
-COPY . .
-
-# Install the Node dependencies (like express)
+# Copy only necessary files
+COPY package*.json ./
 RUN npm install
 
-# Expose the backend port
+# Copy rest of your backend files
+COPY . .
+
+# Expose your backend port
 EXPOSE 4000
 
-# Run the app
+# Run your backend
 CMD ["node", "index.js"]
