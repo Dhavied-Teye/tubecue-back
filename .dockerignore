@@ -3,7 +3,7 @@ separated
 whisper_output
 temp_audio.mp3
 *.vtt
-*.json
+# *.json
 *.wav
 *.mp3
 *.mp4
