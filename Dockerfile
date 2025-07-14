@@ -1,26 +1,31 @@
-FROM node:18-slim
+FROM node:18
 
-# Install system packages
+# Install required system packages
 RUN apt-get update && \
     apt-get install -y \
     ffmpeg \
     python3 \
+    python3-venv \
     python3-pip && \
-    pip3 install yt-dlp && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create and activate virtual environment, install yt-dlp
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir yt-dlp
 
 # Set working directory
 WORKDIR /app
 
-# Install Node dependencies
-COPY package*.json ./
-RUN npm install
-
-# Copy only the app code
+# Copy project files
 COPY . .
+
+# Install Node.js dependencies
+RUN npm install
 
 # Expose backend port
 EXPOSE 4000
 
-# Start the app
+# Start the server
 CMD ["node", "index.js"]
