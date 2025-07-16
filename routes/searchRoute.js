@@ -19,7 +19,8 @@ router.post("/", async (req, res) => {
 
   try {
     // === YouTube captions logic ===
-    const cmd = `yt-dlp --skip-download --write-auto-sub --sub-lang en --sub-format vtt --output "${videoId}.%(ext)s" ${videoUrl}`;
+    const cmd = `yt-dlp --cookies cookies.txt --skip-download --write-auto-sub --sub-lang en --sub-format vtt --output "${videoId}.%(ext)s" ${videoUrl}`;
+
     execSync(cmd, { stdio: "inherit" });
 
     let rawVTT = fs.readFileSync(captionFile, "utf8");
