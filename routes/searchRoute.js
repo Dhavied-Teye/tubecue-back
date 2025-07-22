@@ -19,7 +19,7 @@ router.post("/", async (req, res) => {
 
   try {
     // === YouTube captions logic ===
-    const cmd = `yt-dlp --cookies cookies.txt --skip-download --write-auto-sub --sub-lang en --sub-format vtt --output "${videoId}.%(ext)s" ${videoUrl}`;
+    const cmd = `yt-dlp --cookies cookies.txt --skip-download --write-sub --write-auto-sub --sub-lang en --sub-format vtt --output "${videoId}.%(ext)s" --no-playlist --verbose ${videoUrl}`;
 
     execSync(cmd, { stdio: "inherit" });
 
