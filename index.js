@@ -1,14 +1,13 @@
-// index.js
 import express from "express";
 import cors from "cors";
 import searchRoute from "./routes/searchRoute.js";
 
 const app = express();
 
-// Allow your Chrome Extension (production & local dev)
 const allowedOrigins = [
   "chrome-extension://ldplaanbcpnejhhodaiklcomhmmcggnc",
-  null, // Allow 'null' origin for extensions and local files
+  null, // for local extension
+  undefined, // for curl / Postman
 ];
 
 app.use(
