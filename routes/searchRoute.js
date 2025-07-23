@@ -125,6 +125,7 @@ router.post("/", async (req, res) => {
     return res.json({ matches: whisperMatches, source: "whisper" });
   } catch (err) {
     console.error("❌ Search error:", err.message);
+    console.error("❌ Full search error object:", err);
     if (fs.existsSync(captionFile)) fs.unlinkSync(captionFile);
     if (cookieFile && fs.existsSync(cookieFile)) fs.unlinkSync(cookieFile);
     return res.status(500).json({ error: "Search failed." });
