@@ -33,6 +33,7 @@ app.use(cookieParser());
 
 // Routes
 app.use("/api/captions", searchRoute);
+console.log("🛠 Mounting /api/captions route...");
 
 // Server
 app.listen(4000, () => {
