@@ -8,7 +8,7 @@ import os from "os";
 
 const router = express.Router();
 
-router.post("/", async (req, res) => {
+router.post("/api/captions", async (req, res) => {
   const { videoId, keyword } = req.body;
   const cookie = req.cookies?.youtube; // expect cookie to be stored under 'youtube'
   console.log("🔍 Received request:", {

@@ -32,7 +32,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Routes
-app.use("/search", searchRoute);
+app.use("/api/captions", searchRoute);
 
 // Server
 app.listen(4000, () => {
