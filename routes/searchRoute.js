@@ -4,18 +4,12 @@ import { execSync } from "child_process";
 import webvtt from "node-webvtt";
 import Fuse from "fuse.js";
 import path from "path";
-import os from "os";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const { videoId, keyword } = req.body;
-  const cookie = req.cookies?.youtube; // expect cookie to be stored under 'youtube'
-  console.log("🔍 Received request:", {
-    videoId,
-    keyword,
-    hasCookie: !!cookie,
-  });
+  console.log("🔍 Received request:", { videoId, keyword });
 
   const TEMP_AUDIO = "temp_audio.mp3";
   const OUTPUT_DIR = "whisper_output";
@@ -23,21 +17,16 @@ router.post("/", async (req, res) => {
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const captionFile = `${videoId}.en.vtt`;
 
-  // Save cookies to a temp file if present
-  let cookieFile = null;
-  if (cookie) {
-    const tempDir = os.tmpdir();
-    cookieFile = path.join(tempDir, `cookies-${Date.now()}.txt`);
-    fs.writeFileSync(cookieFile, cookie);
-    console.log("🍪 Cookie file written:", cookieFile);
+  // Point to the exported cookie file
+  const cookieFile = path.resolve("youtube_cookies.txt");
+  if (!fs.existsSync(cookieFile)) {
+    return res.status(400).json({ error: "cookies.txt not found" });
   }
 
   try {
-    // yt-dlp command with optional cookie support
+    // === Try captions first ===
     console.log("📥 Attempting to download captions with yt-dlp...");
-    const cmd = `yt-dlp --skip-download --write-sub --write-auto-sub --sub-lang en --sub-format vtt --output "${videoId}.%(ext)s" ${
-      cookieFile ? `--cookies ${cookieFile}` : ""
-    } --no-playlist ${videoUrl}`;
+    const cmd = `yt-dlp --skip-download --write-sub --write-auto-sub --sub-lang en --sub-format vtt --output "${videoId}.%(ext)s" --cookies "${cookieFile}" --no-playlist ${videoUrl}`;
     execSync(cmd, { stdio: "inherit" });
 
     if (!fs.existsSync(captionFile)) {
@@ -73,8 +62,6 @@ router.post("/", async (req, res) => {
     fs.unlinkSync(captionFile);
     console.log("🧹 Cleaned up caption file.");
 
-    if (cookieFile) fs.unlinkSync(cookieFile); // Clean up cookie file
-
     if (matches.length > 0) {
       console.log("✅ Matches found in YouTube captions.");
       return res.json({ matches, source: "youtube" });
@@ -84,9 +71,7 @@ router.post("/", async (req, res) => {
     console.log("🌀 No matches in captions. Falling back to Whisper...");
 
     execSync(
-      `yt-dlp -x --audio-format mp3 --downloader ffmpeg --postprocessor-args "-ss 00:00:00 -t 180" -o ${TEMP_AUDIO} ${
-        cookieFile ? `--cookies ${cookieFile}` : ""
-      } ${videoUrl}`,
+      `yt-dlp -x --audio-format mp3 --downloader ffmpeg --postprocessor-args "-ss 00:00:00 -t 180" -o ${TEMP_AUDIO} --cookies "${cookieFile}" ${videoUrl}`,
       { stdio: "inherit" }
     );
 
@@ -98,9 +83,7 @@ router.post("/", async (req, res) => {
     )}/vocals.wav`;
     execSync(
       `whisper "${vocalsPath}" --model tiny --output_format json --output_dir ${OUTPUT_DIR}`,
-      {
-        stdio: "inherit",
-      }
+      { stdio: "inherit" }
     );
 
     console.log("🗂 Reading Whisper JSON output...");
@@ -119,18 +102,13 @@ router.post("/", async (req, res) => {
     fs.rmSync("separated", { recursive: true, force: true });
     fs.rmSync(OUTPUT_DIR, { recursive: true, force: true });
 
-    if (cookieFile) fs.unlinkSync(cookieFile); // Final cookie cleanup
-
     console.log("✅ Whisper matches found.");
     return res.json({ matches: whisperMatches, source: "whisper" });
   } catch (err) {
     console.error("❌ Search error:", err.message);
     console.error("❌ Full error stack:\n", err.stack);
-    console.error("❌ Complete error object:\n", JSON.stringify(err, null, 2));
 
     if (fs.existsSync(captionFile)) fs.unlinkSync(captionFile);
-    if (cookieFile && fs.existsSync(cookieFile)) fs.unlinkSync(cookieFile);
-
     return res.status(500).json({ error: "Search failed." });
   }
 });
