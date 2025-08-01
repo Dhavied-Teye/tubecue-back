@@ -1,36 +1,53 @@
 import express from "express";
 import fs from "fs";
-import { execSync } from "child_process";
+import { exec, execSync } from "child_process";
 import webvtt from "node-webvtt";
 import Fuse from "fuse.js";
 import path from "path";
+import util from "util";
 
+const execPromise = util.promisify(exec);
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const { videoId, keyword } = req.body;
   console.log("🔍 Received request:", { videoId, keyword });
 
-  const TEMP_AUDIO = "temp_audio.mp3";
-  const OUTPUT_DIR = "whisper_output";
+  const TEMP_AUDIO = "/tmp/temp_audio.mp3";
+  const OUTPUT_DIR = "/tmp/whisper_output";
   const WHISPER_JSON = `${OUTPUT_DIR}/vocals.json`;
+  const captionFile = `/tmp/${videoId}.en.vtt`;
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const captionFile = `${videoId}.en.vtt`;
-
-  // Point to the exported cookie file
-  const cookieFile = path.resolve("youtube_cookies.txt");
-  if (!fs.existsSync(cookieFile)) {
-    return res.status(400).json({ error: "cookies.txt not found" });
-  }
+  const cookieFile = "/tmp/youtube_cookies.txt";
+  const userAgent = `"Mozilla/5.0 (Windows NT 10.0; Win64; x64)"`;
+  const referer = `"https://www.youtube.com"`;
 
   try {
     // === Try captions first ===
     console.log("📥 Attempting to download captions with yt-dlp...");
-    const cmd = `yt-dlp --skip-download --write-sub --write-auto-sub --sub-lang en --sub-format vtt --output "${videoId}.%(ext)s" --cookies "${cookieFile}" --no-playlist ${videoUrl}`;
-    execSync(cmd, { stdio: "inherit" });
+    const cmd = `yt-dlp \
+  --no-warnings \
+  --skip-download \
+  --write-sub \
+  --write-auto-sub \
+  --sub-lang en \
+  --sub-format vtt \
+  --output "/tmp/${videoId}.%(ext)s" \
+  --cookies "${cookieFile}" \
+  --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+  --referer "https://www.youtube.com" \
+  --no-playlist \
+  "${videoUrl}"`;
+
+    const { stdout, stderr } = await execPromise(cmd);
+    console.log("YT-DLP STDOUT:\n", stdout);
+    if (stderr) console.error("YT-DLP STDERR:\n", stderr);
 
     if (!fs.existsSync(captionFile)) {
-      throw new Error(`❌ Caption file not found: ${captionFile}`);
+      console.error("❌ Caption file missing after yt-dlp:", captionFile);
+      throw new Error(
+        "Caption file not found. Possibly no captions available."
+      );
     }
 
     console.log("📄 Reading caption file:", captionFile);
@@ -71,15 +88,15 @@ router.post("/", async (req, res) => {
     console.log("🌀 No matches in captions. Falling back to Whisper...");
 
     execSync(
-      `yt-dlp -x --audio-format mp3 --downloader ffmpeg --postprocessor-args "-ss 00:00:00 -t 180" -o ${TEMP_AUDIO} --cookies "${cookieFile}" ${videoUrl}`,
+      `yt-dlp -x --audio-format mp3 --downloader ffmpeg --postprocessor-args "-ss 00:00:00 -t 180" -o ${TEMP_AUDIO} --cookies "${cookieFile}" --user-agent ${userAgent} --referer ${referer} ${videoUrl}`,
       { stdio: "inherit" }
     );
 
     execSync(`demucs ${TEMP_AUDIO}`, { stdio: "inherit" });
 
-    const vocalsPath = `separated/htdemucs/${TEMP_AUDIO.replace(
-      ".mp3",
-      ""
+    const vocalsPath = `/tmp/separated/htdemucs/${path.basename(
+      TEMP_AUDIO,
+      ".mp3"
     )}/vocals.wav`;
     execSync(
       `whisper "${vocalsPath}" --model tiny --output_format json --output_dir ${OUTPUT_DIR}`,
@@ -99,7 +116,7 @@ router.post("/", async (req, res) => {
 
     // Cleanup
     fs.unlinkSync(TEMP_AUDIO);
-    fs.rmSync("separated", { recursive: true, force: true });
+    fs.rmSync("/tmp/separated", { recursive: true, force: true });
     fs.rmSync(OUTPUT_DIR, { recursive: true, force: true });
 
     console.log("✅ Whisper matches found.");
@@ -107,7 +124,6 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("❌ Search error:", err.message);
     console.error("❌ Full error stack:\n", err.stack);
-
     if (fs.existsSync(captionFile)) fs.unlinkSync(captionFile);
     return res.status(500).json({ error: "Search failed." });
   }
