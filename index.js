@@ -5,11 +5,10 @@ import searchRoute from "./routes/searchRoute.js";
 
 const app = express();
 
-// Your deployed frontend origin + extension ID
 const allowedOrigins = [
-  "chrome-extension://ldplaanbcpnejhhodaiklcomhmmcggnc", // Extension
-  "http://localhost:5173", // For local testing if needed
-  "https://your-deployed-domain.com", // Add if using deployed frontend
+  "chrome-extension://ldplaanbcpnejhhodaiklcomhmmcggnc",
+  "http://localhost:5173",
+  "https://your-deployed-domain.com",
   null,
   undefined,
 ];
@@ -23,19 +22,22 @@ app.use(
         callback(new Error(`Not allowed by CORS: ${origin}`));
       }
     },
-    credentials: true, // 🔐 Allow cookies to be sent
+    credentials: true,
   })
 );
 
-// Parse JSON and cookies
 app.use(express.json());
 app.use(cookieParser());
 
-// Routes
 app.use("/api/captions", searchRoute);
 console.log("🛠 Mounting /api/captions route...");
 
-// Server
-app.listen(4000, () => {
-  console.log("TubeCue backend running on http://localhost:4000");
+app.use((err, req, res, next) => {
+  console.error("❌ Server Error:", err.stack);
+  res.status(500).json({ error: err.message || "Internal Server Error" });
+});
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`TubeCue backend running on port ${PORT}`);
 });
