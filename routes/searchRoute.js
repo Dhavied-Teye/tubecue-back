@@ -9,6 +9,15 @@ import util from "util";
 const execPromise = util.promisify(exec);
 const router = express.Router();
 
+// ✅ Cookie file path handling (local vs Fly.io)
+const localCookie = path.join(process.cwd(), "youtube_cookies.txt");
+const flyCookie = "/tmp/youtube_cookies.txt";
+const cookieFile = fs.existsSync(localCookie)
+  ? localCookie
+  : fs.existsSync(flyCookie)
+  ? flyCookie
+  : null;
+
 router.post("/", async (req, res) => {
   const { videoId, keyword } = req.body;
   console.log("🔍 Received request:", { videoId, keyword });
@@ -18,7 +27,6 @@ router.post("/", async (req, res) => {
   const WHISPER_JSON = `${OUTPUT_DIR}/vocals.json`;
   const captionFile = `/tmp/${videoId}.en.vtt`;
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const cookieFile = "/tmp/youtube_cookies.txt";
   const userAgent = `"Mozilla/5.0 (Windows NT 10.0; Win64; x64)"`;
   const referer = `"https://www.youtube.com"`;
 
@@ -33,7 +41,7 @@ router.post("/", async (req, res) => {
   --sub-lang en \
   --sub-format vtt \
   --output "/tmp/${videoId}.%(ext)s" \
-  --cookies "${cookieFile}" \
+  ${cookieFile ? `--cookies "${cookieFile}"` : ""} \
   --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
   --referer "https://www.youtube.com" \
   --no-playlist \
@@ -88,7 +96,9 @@ router.post("/", async (req, res) => {
     console.log("🌀 No matches in captions. Falling back to Whisper...");
 
     execSync(
-      `yt-dlp -x --audio-format mp3 --downloader ffmpeg --postprocessor-args "-ss 00:00:00 -t 180" -o ${TEMP_AUDIO} --cookies "${cookieFile}" --user-agent ${userAgent} --referer ${referer} ${videoUrl}`,
+      `yt-dlp -x --audio-format mp3 --downloader ffmpeg --postprocessor-args "-ss 00:00:00 -t 180" -o ${TEMP_AUDIO} ${
+        cookieFile ? `--cookies "${cookieFile}"` : ""
+      } --user-agent ${userAgent} --referer ${referer} ${videoUrl}`,
       { stdio: "inherit" }
     );
 
