@@ -1,6 +1,6 @@
 import express from "express";
 import fs from "fs";
-import { exec, execSync } from "child_process";
+import { exec } from "child_process";
 import webvtt from "node-webvtt";
 import Fuse from "fuse.js";
 import path from "path";
@@ -9,43 +9,42 @@ import util from "util";
 const execPromise = util.promisify(exec);
 const router = express.Router();
 
-// ✅ Cookie file path handling (local vs Fly.io)
-const localCookie = path.join(process.cwd(), "youtube_cookies.txt");
-const flyCookie = "/tmp/youtube_cookies.txt";
-const cookieFile = fs.existsSync(localCookie)
-  ? localCookie
-  : fs.existsSync(flyCookie)
-  ? flyCookie
-  : null;
-
 router.post("/", async (req, res) => {
-  const { videoId, keyword } = req.body;
-  console.log("🔍 Received request:", { videoId, keyword });
+  const { videoId, keyword, cookies } = req.body;
+  console.log("🔍 Received request:", {
+    videoId,
+    keyword,
+    hasCookies: !!cookies,
+  });
 
-  const TEMP_AUDIO = "/tmp/temp_audio.mp3";
-  const OUTPUT_DIR = "/tmp/whisper_output";
-  const WHISPER_JSON = `${OUTPUT_DIR}/vocals.json`;
   const captionFile = `/tmp/${videoId}.en.vtt`;
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const userAgent = `"Mozilla/5.0 (Windows NT 10.0; Win64; x64)"`;
-  const referer = `"https://www.youtube.com"`;
 
   try {
     // === Try captions first ===
     console.log("📥 Attempting to download captions with yt-dlp...");
+
+    // if popup provided cookies, write them to tmp file
+    let cookieArg = "";
+    if (cookies) {
+      const cookiePath = `/tmp/${videoId}_cookies.txt`;
+      fs.writeFileSync(cookiePath, cookies);
+      cookieArg = `--cookies "${cookiePath}"`;
+    }
+
     const cmd = `yt-dlp \
-  --no-warnings \
-  --skip-download \
-  --write-sub \
-  --write-auto-sub \
-  --sub-lang en \
-  --sub-format vtt \
-  --output "/tmp/${videoId}.%(ext)s" \
-  ${cookieFile ? `--cookies "${cookieFile}"` : ""} \
-  --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-  --referer "https://www.youtube.com" \
-  --no-playlist \
-  "${videoUrl}"`;
+      --no-warnings \
+      --skip-download \
+      --write-sub \
+      --write-auto-sub \
+      --sub-lang en \
+      --sub-format vtt \
+      --output "/tmp/${videoId}.%(ext)s" \
+      ${cookieArg} \
+      --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+      --referer "https://www.youtube.com" \
+      --no-playlist \
+      "${videoUrl}"`;
 
     const { stdout, stderr } = await execPromise(cmd);
     console.log("YT-DLP STDOUT:\n", stdout);
@@ -84,58 +83,29 @@ router.post("/", async (req, res) => {
       start: Math.max(0, Math.floor(r.item.start - 5)),
     }));
 
+    // cleanup
     fs.unlinkSync(captionFile);
-    console.log("🧹 Cleaned up caption file.");
+    if (cookies) {
+      fs.unlinkSync(`/tmp/${videoId}_cookies.txt`);
+    }
 
     if (matches.length > 0) {
       console.log("✅ Matches found in YouTube captions.");
       return res.json({ matches, source: "youtube" });
     }
 
-    // === Whisper fallback ===
-    console.log("🌀 No matches in captions. Falling back to Whisper...");
-
-    execSync(
-      `yt-dlp -x --audio-format mp3 --downloader ffmpeg --postprocessor-args "-ss 00:00:00 -t 180" -o ${TEMP_AUDIO} ${
-        cookieFile ? `--cookies "${cookieFile}"` : ""
-      } --user-agent ${userAgent} --referer ${referer} ${videoUrl}`,
-      { stdio: "inherit" }
+    // === Whisper fallback disabled ===
+    console.log(
+      "⚠️ No matches found in captions, skipping Whisper (disabled)."
     );
-
-    execSync(`demucs ${TEMP_AUDIO}`, { stdio: "inherit" });
-
-    const vocalsPath = `/tmp/separated/htdemucs/${path.basename(
-      TEMP_AUDIO,
-      ".mp3"
-    )}/vocals.wav`;
-    execSync(
-      `whisper "${vocalsPath}" --model tiny --output_format json --output_dir ${OUTPUT_DIR}`,
-      { stdio: "inherit" }
-    );
-
-    console.log("🗂 Reading Whisper JSON output...");
-    const whisperData = JSON.parse(fs.readFileSync(WHISPER_JSON, "utf8"));
-    const whisperMatches = whisperData.segments
-      .filter((segment) =>
-        segment.text.toLowerCase().includes(keyword.toLowerCase())
-      )
-      .map((segment) => ({
-        text: segment.text,
-        start: Math.max(0, Math.floor(segment.start - 5)),
-      }));
-
-    // Cleanup
-    fs.unlinkSync(TEMP_AUDIO);
-    fs.rmSync("/tmp/separated", { recursive: true, force: true });
-    fs.rmSync(OUTPUT_DIR, { recursive: true, force: true });
-
-    console.log("✅ Whisper matches found.");
-    return res.json({ matches: whisperMatches, source: "whisper" });
+    return res.json({ matches: [], source: "youtube" });
   } catch (err) {
     console.error("❌ Search error:", err.message);
     console.error("❌ Full error stack:\n", err.stack);
     if (fs.existsSync(captionFile)) fs.unlinkSync(captionFile);
-    return res.status(500).json({ error: "Search failed." });
+    return res
+      .status(500)
+      .json({ error: "Search failed.", details: err.message });
   }
 });
 
