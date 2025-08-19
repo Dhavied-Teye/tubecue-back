@@ -5,6 +5,9 @@ import searchRoute from "./routes/searchRoute.js";
 
 const app = express();
 
+// Debug: check what we actually imported
+console.log("📦 searchRoute import:", searchRoute);
+
 // Allowed origins (extension, dev, prod)
 const allowedOrigins = [
   "chrome-extension://ldplaanbcpnejhhodaiklcomhmmcggnc", // Your actual extension ID
@@ -32,8 +35,8 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Routes
-app.use("/api/captions", searchRoute);
 console.log("🛠 Mounting /api/captions route...");
+app.use("/api/captions", searchRoute);
 
 // Error handler
 app.use((err, req, res, next) => {
